@@ -1,0 +1,74 @@
+#Create external data source
+
+CREATE EXTERNAL DATA SOURCE files
+WITH (
+    LOCATION = 'https://mydatalake.blob.core.windows.net/data/files/'
+);
+
+#Create external data source with encapsulated credentials
+
+CREATE DATABASE SCOPED CREDENTIAL storagekeycred
+WITH
+    IDENTITY='SHARED ACCESS SIGNATURE',  
+    SECRET = 'sv=xxx...';
+
+CREATE EXTERNAL DATA SOURCE secureFiles
+WITH (
+    LOCATION = 'https://mydatalake.blob.core.windows.net/data/secureFiles/'
+    CREDENTIAL = storagekeycred
+);
+
+#Create external file format
+
+CREATE EXTERNAL FILE FORMAT ParquetFormat
+WITH (
+        FORMAT_TYPE = PARQUET,
+        DATA_COMPRESSION = 'org.apache.hadoop.io.compress.SnappyCodec'
+    );
+    
+#Transform data and Store results in external table
+
+CREATE EXTERNAL TABLE SpecialOrders
+    WITH (
+        -- details for storing results
+        LOCATION = 'special_orders/',
+        DATA_SOURCE = files,
+        FILE_FORMAT = ParquetFormat
+    )
+AS
+SELECT OrderID, CustomerName, OrderTotal
+FROM
+    OPENROWSET(
+        -- details for reading source files
+        BULK 'sales_orders/*.csv',
+        DATA_SOURCE = 'files',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE
+    ) AS source_data
+WHERE OrderType = 'Special Order';
+
+#Transform data and store results in external table using fully qualified path for data source
+
+CREATE EXTERNAL TABLE SpecialOrders
+    WITH (
+        -- details for storing results
+        LOCATION = 'special_orders/',
+        DATA_SOURCE = files,
+        FILE_FORMAT = ParquetFormat
+    )
+AS
+SELECT OrderID, CustomerName, OrderTotal
+FROM
+    OPENROWSET(
+        -- details for reading source files
+        BULK 'https://mystorage.blob.core.windows.net/data/sales_orders/*.csv',
+        FORMAT = 'CSV',
+        PARSER_VERSION = '2.0',
+        HEADER_ROW = TRUE
+    ) AS source_data
+WHERE OrderType = 'Special Order';
+
+#Dropping external table
+
+DROP EXTERNAL TABLE SpecialOrders;
